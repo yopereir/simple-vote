@@ -16,7 +16,7 @@ spec:
         app: simple-vote
     spec:
       containers:
-      - image: ghcr.io/simple-vote/simple-vote
+      - image: gcr.io/portfolio-352522/github.com/yopereir/simple-vote:$SHORT_SHA
         imagePullPolicy: IfNotPresent
         name: simple-vote
         env:
