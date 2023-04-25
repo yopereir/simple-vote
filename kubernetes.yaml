@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  generation: 1
+  labels:
+    app: simple-vote
+  name: simple-vote-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-vote
+  template:
+    metadata:
+      labels:
+        app: simple-vote
+    spec:
+      containers:
+      - image: ghcr.io/simple-vote/simple-vote
+        imagePullPolicy: IfNotPresent
+        name: simple-vote
+        env:
+        - name: SIMPLEVOTE_DB_URL
+          value: "simple_vote_db"
+        - name: SIMPLEVOTE_DB_USERNAME
+          value: root
+        - name: SIMPLEVOTE_DB_PASSWORD
+          value: "example"
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: simple-vote
+  name: simple-vote-service
+spec:
+  ports:
+  - port: 4567
+    protocol: TCP
+    targetPort: 4567
+  selector:
+    app: simple-vote
+  type: ClusterIP
+---
+# Assuming volume is mounted as: minikube start --addons=ingress,ingress-dns --mount --mount-string $HOME:/minikube-host$HOME
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  generation: 1
+  labels:
+    service: database
+    app: postgres
+  name: postgres-deployment-database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: database
+      app: postgres
+  template:
+    metadata:
+      labels:
+        service: database
+        app: postgres
+    spec:
+      containers:
+      - image: postgres
+        imagePullPolicy: IfNotPresent
+        name: postgres
+        volumeMounts:
+          - name: scripts-dir
+            mountPath: /docker-entrypoint-initdb.d
+          - name: postgres-dir
+            mountPath: /var/lib/postgresql/data/
+        env:
+          - name: POSTGRES_PASSWORD
+            value: example
+          - name: POSTGRES_USER
+            value: root
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+          - name: POSTGRES_INITDB_ARGS
+            value: ""
+          - name: POSTGRES_DB
+            value: simplevote
+      volumes:
+        - name: scripts-dir
+          hostPath:
+            path: "/minikube-host$PWD/init-scripts"
+            type: DirectoryOrCreate
+        - name: postgres-dir
+          hostPath:
+            path: "/minikube-host$PWD/databases/"
+            type: DirectoryOrCreate
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: database
+    app: postgres
+  name: simple_vote_db
+spec:
+  ports:
+  - port: 5432
+    protocol: TCP
+    targetPort: 5432
+  selector:
+    service: database
+    app: postgres
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-data
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/minikube-host$PWD/database-pv"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pv-claim
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi
